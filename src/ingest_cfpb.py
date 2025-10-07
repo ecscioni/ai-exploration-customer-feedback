@@ -1,24 +1,23 @@
 # src/ingest_cfpb.py
 import re
 from pathlib import Path
-
 import pandas as pd
 
-RAW_IN = Path("data/raw/complaints.csv")  # your download
+RAW_IN = Path("data/raw/complaints.csv")  # your CFPB download
 RAW_OUT = Path("data/raw/customer_feedback.csv")  # project-standard file name
 
-# ---- CONFIG: tune these if needed ----
-# Keep only CFPB products where our 5 buckets make sense
+# ---- CONFIG ----
+# Keep only CFPB products where our 5 buckets make sense.
+# Values are normalized (snake_case) versions of the "Product" column.
 ALLOWED_PRODUCTS_NORM = {
     "credit_card_or_prepaid_card",
     "bank_account_or_service",
     "money_transfer_virtual_currency_or_money_service",
-    "checking_or_savings_account",  # sometimes used in newer dumps
-    "credit_card",  # older naming variants
+    "checking_or_savings_account",  # seen in some dumps
+    "credit_card",  # older variants
     "prepaid_card",
-    "money_transfers",  # older variant
+    "money_transfers",
 }
-
 MIN_TEXT_LEN = 15  # drop super-short narratives
 
 
@@ -30,12 +29,11 @@ def normalize(name: str) -> str:
 
 
 def contains(patterns, s: str) -> bool:
-    s = s or ""
-    s = s.lower()
+    s = (s or "").lower()
     return any(re.search(p, s) for p in patterns)
 
 
-# ISSUE-based rules (most precise → highest priority)
+# ISSUE-based rules (more precise → higher priority)
 ISSUE_REFUND_PATTERNS = [
     r"\brefund",
     r"chargeback",
@@ -118,30 +116,23 @@ TEXT_DELIVERY_PATTERNS = [
 
 
 def label_row(narrative: str, issue: str, product: str) -> str:
-    issue = (issue or "").lower()
-    text = (narrative or "").lower()
-    prod = (product or "").lower()
-
-    # 1) ISSUE first (more stable than free-text)
+    # 1) ISSUE first (tends to be cleaner than free text)
     if contains(ISSUE_REFUND_PATTERNS, issue):
         return "refund_request"
     if contains(ISSUE_BILLING_PATTERNS, issue):
         return "billing_problem"
     if contains(ISSUE_DELIVERY_PATTERNS, issue):
         return "delivery_issue"
-
-    # 2) TEXT app/site/login/etc.
-    if contains(TEXT_APP_PATTERNS, text):
+    # 2) TEXT: app/site/login etc.
+    if contains(TEXT_APP_PATTERNS, narrative):
         return "app_bug"
-
-    # 3) TEXT refund/billing/delivery
-    if contains(TEXT_REFUND_PATTERNS, text):
+    # 3) TEXT: refund / billing / delivery
+    if contains(TEXT_REFUND_PATTERNS, narrative):
         return "refund_request"
-    if contains(TEXT_BILLING_PATTERNS, text):
+    if contains(TEXT_BILLING_PATTERNS, narrative):
         return "billing_problem"
-    if contains(TEXT_DELIVERY_PATTERNS, text):
+    if contains(TEXT_DELIVERY_PATTERNS, narrative):
         return "delivery_issue"
-
     # 4) fallback
     return "other"
 
@@ -150,43 +141,41 @@ def main():
     if not RAW_IN.exists():
         raise SystemExit(f"Input file not found: {RAW_IN}")
 
-    # Read minimal columns to save RAM; handle BOM and weird encodings
+    # Read CSV; handle BOM and encodings from Excel/browser exports
     try:
         df = pd.read_csv(RAW_IN, encoding="utf-8-sig", low_memory=False)
     except UnicodeDecodeError:
         df = pd.read_csv(RAW_IN, encoding="utf-8", low_memory=False)
 
-    # Normalize all column names
+    # Normalize column names to snake_case
     col_map = {c: normalize(c) for c in df.columns}
     df.rename(columns=col_map, inplace=True)
 
-    # Figure out available names across dumps
+    # Identify useful columns (exact names vary by dump)
     text_col = "consumer_complaint_narrative"
     product_col = "product"
     issue_col = "issue"
 
-    have = set(df.columns)
-    missing = [c for c in [text_col, product_col, issue_col] if c not in have]
-    if text_col not in have:
+    if text_col not in df.columns:
         raise SystemExit(
             f"Column '{text_col}' not found. Available = {list(df.columns)[:20]} ..."
         )
 
-    # Keep only what we need
+    # Keep only the columns we need
     keep = [c for c in [text_col, product_col, issue_col] if c in df.columns]
     df = df[keep].copy()
 
-    # Filter to allowed products (after normalizing values)
+    # Filter to relevant products (if product column exists)
     if product_col in df.columns:
         prod_vals = df[product_col].astype(str).map(normalize)
         df = df[prod_vals.isin(ALLOWED_PRODUCTS_NORM)].copy()
 
-    # Drop empty narratives + trim
+    # Drop empty or super-short narratives
     df = df[df[text_col].notnull()].copy()
     df[text_col] = df[text_col].astype(str).str.strip()
     df = df[df[text_col].str.len() >= MIN_TEXT_LEN].copy()
 
-    # Label
+    # Label rows
     df["category"] = [
         label_row(
             narrative=row.get(text_col, ""),
@@ -196,14 +185,13 @@ def main():
         for _, row in df.iterrows()
     ]
 
-    # Standardize schema
+    # Standardize schema: text + category
     df.rename(columns={text_col: "text"}, inplace=True)
     df = df[["text", "category"]]
 
-    # Drop dupes and shuffle
+    # Drop duplicates and shuffle
     df = df.drop_duplicates().sample(frac=1.0, random_state=42).reset_index(drop=True)
 
-    # Write
     RAW_OUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(RAW_OUT, index=False, encoding="utf-8")
 

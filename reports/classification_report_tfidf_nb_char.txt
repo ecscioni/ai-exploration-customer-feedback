@@ -1,0 +1,16 @@
+Accuracy: 0.607
+Macro F1: 0.530
+
+                 precision    recall  f1-score   support
+
+        app_bug       0.67      0.66      0.66      5986
+billing_problem       0.62      0.69      0.65      5997
+ delivery_issue       0.57      0.33      0.42      2125
+          other       0.64      0.18      0.28      2399
+ refund_request       0.56      0.74      0.63      6000
+
+       accuracy                           0.61     22507
+      macro avg       0.61      0.52      0.53     22507
+   weighted avg       0.61      0.61      0.59     22507
+
+Confusion matrix saved to .\reports\figures\confusion_matrix_tfidf_nb_char.png

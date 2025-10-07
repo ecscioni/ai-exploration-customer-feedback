@@ -1,43 +1,63 @@
-# AI Exploration — Customer Feedback Classification
+# AI Exploration — Customer Feedback Classification (Plain-English Guide)
 
-This repository contains a small end‑to‑end natural language processing (NLP) project.  The goal is to build a simple but complete pipeline that classifies short customer feedback messages into high‑level complaint categories.  It demonstrates exploratory data analysis (EDA), baseline modelling, feature engineering, model training, error analysis, and a minimal command‑line prediction script.
+This project is a **toy sorter** for short customer messages. You type a message like _“I was charged twice”_, and it predicts one of five boxes:
 
-## Project structure
+- `delivery_issue`
+- `refund_request`
+- `billing_problem`
+- `app_bug`
+- `other`
 
-The project uses a conventional layout to keep data, code, models and notes separate:
+It’s small on purpose, so you can see the **whole machine-learning pipeline** end-to-end:
+
+1) get data → 2) clean it → 3) make a training/test split → 4) train a model → 5) check results → 6) use it to predict new messages.
+
+No heavy math. No fancy code. Copy–paste the commands and watch it work.
+
+---
+
+## What’s in this repo (folders)
 
 ```
-ai‑exploration‑customer‑feedback/
-├── data/          # datasets used by the project
-│   ├── raw/       # original unmodified data files
-│   │   └── customer_feedback.csv
-│   └── processed/ # cleaned and split data (train/validation/test)
-├── notebooks/     # Jupyter notebooks used for exploratory analysis and modelling
-├── src/           # reusable Python modules and scripts (preprocess, training, evaluation, prediction)
-├── models/        # persisted models and vectorizers (*.joblib)
-├── reports/
-│   └── figures/   # plots generated during the analysis
-├── notes/         # human‑readable narrative logs (planning, data exploration, modelling, error analysis, takeaways)
-│   ├── assets/    # screenshots or small video clips referenced in the notes
-├── requirements.txt
-└── README.md      # this file
+ai-exploration-customer-feedback/
+├─ data/
+│  ├─ raw/          # big, original files (don’t edit)
+│  └─ processed/    # small, cleaned files used for training/testing
+├─ models/          # saved model files you can reuse (vectorizer + classifier)
+├─ reports/         # pictures and text reports (evaluation results)
+│  └─ figures/
+├─ src/             # small scripts you run
+├─ notes/           # plain-language notes (what we tried, what worked, failures too)
+└─ README.md        # this guide
 ```
 
-Each subfolder and script is described in detail in the accompanying notes.  Consult the Markdown files in `notes/` for plain‑language explanations of the decisions made at each stage.
+---
 
-## Getting started
+## Key idea (in kid-friendly words)
 
-### 1. Clone the repository
+- We turn text into numbers with **TF‑IDF** (common words like “the/and” matter less; special words like “refund/crash” matter more).
+- A simple classifier (**Naive Bayes** by default) learns which words push toward which box.
+- We save two files so we can reuse the model instantly:
+  - `models/vectorizer.joblib` — how the text becomes numbers
+  - `models/classifier.joblib` — the trained model itself
 
-```bash
-git clone <repository-url>
-cd ai-exploration-customer-feedback
+> If you train again, these files get **overwritten** with the new model. If you want to keep multiple models, save to different filenames (see below).
+
+---
+
+## One‑time setup
+
+Open a terminal in the project folder and create a Python “bubble” (virtual environment).
+
+**Windows PowerShell**
+```powershell
+python -m venv .venv
+. .\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### 2. Set up a virtual environment
-
-Creating a dedicated Python environment avoids conflicts with other projects.  Any environment manager (such as `venv`, `conda` or `pipenv`) works; here is an example using the built‑in `venv`:
-
+**macOS / Linux**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -45,37 +65,213 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3. Run the notebooks
+---
 
-The notebooks under `notebooks/` walk through the entire process:
+## About the datasets we use
 
-1. **01_eda.ipynb** – inspect the dataset, explore class distribution and text characteristics.
-2. **02_baselines_and_features.ipynb** – implement a majority‑class baseline and a simple Bag‑of‑Words + Naive Bayes baseline; compare basic preprocessing options.
-3. **03_model_nb_tfidf.ipynb** – build and tune a TF‑IDF + Naive Bayes model, perform validation, and save the best vectorizer and classifier to the `models/` directory.
-4. **04_error_analysis_and_improvements.ipynb** – review misclassified examples, look at the most informative features per class, and try one small improvement (e.g. character n‑grams or ComplementNB).
+You will see **three sizes** of data in this project:
 
-Open a Jupyter environment (for example with `jupyter notebook` or `jupyter lab`), navigate to the `notebooks/` folder, and execute each notebook sequentially.  Plots and reports are saved automatically to `reports/figures/`.
+- **Small sample** (recommended while learning): `data/raw/customer_feedback_sample.csv`  
+  – A balanced-ish subset created from the big CSV. Fast to train/evaluate.
+- **Bigger sample**: same file but with higher caps (see below). Good once the pipeline works.
+- **Full raw CSV**: `data/raw/complaints.csv` from CFPB (very big). We don’t train on the full file yet; it’s slow and noisy.
 
-### 4. Command‑line prediction
+> **Change of plan (learning outcome):** we keep using `customer_feedback_sample.csv` so failures and fixes are clear. You can still scale up later.
 
-After training the model, you can classify new feedback messages via the CLI script:
+---
 
-```bash
-python src/predict.py --text "App keeps crashing when I try to pay"
+## Workflow overview (plain words)
+
+- **ingest** → map the big complaints CSV to our two columns: `text`, `category` (5 boxes).  
+- **make_sample** → create a smaller, balanced training set (cap each class; keep “other” smaller).  
+- **preprocess** → split the sample into **train** and **test** CSVs.  
+- **train** → learn TF‑IDF + Naive Bayes (or Logistic Regression).  
+- **evaluate** → print metrics and save a confusion‑matrix picture.  
+- **predict** → try single messages from the terminal.
+
+You can run all of this with copy–paste commands below.
+
+---
+
+## 0) Put your big CSV in place (only for real data)
+
+Put the downloaded CFPB CSV here:
+```
+data/raw/complaints.csv
 ```
 
-The script loads the saved vectorizer and classifier from the `models/` directory, transforms the input text, and prints the predicted category along with class probabilities.
+If you don’t have this file, skip to **2) Make a training sample** (maybe you already have `customer_feedback_sample.csv` in the repo).
 
-## Data
+---
 
-Finding a publicly available dataset of customer feedback annotated with high‑level complaint categories (e.g. *delivery issue*, *refund request*, *billing problem*, *app bug*) proved difficult.  Public sources such as the U.S. Consumer Financial Protection Bureau’s complaint database describe financial product complaints, but their topics differ from delivery/billing/app issues, and the licence was unspecified【56518301983924†L85-L103】.  Other datasets on Kaggle or GitHub required user accounts or were inaccessible in this environment.  To proceed with the project we therefore generated a synthetic dataset.
+## 1) Ingest (map to our 5 boxes) — real data only
 
-The synthetic dataset contains 500 messages distributed across five categories with intentional class imbalance.  Each sample combines typical phrases customers use when complaining about deliveries, requesting refunds, questioning billing errors, reporting application bugs, or asking miscellaneous questions.  See `notes/01_data.md` for details about how the dataset was generated.
+**Creates**: `data/raw/customer_feedback.csv` with **two columns**: `text`, `category`
 
-## Licence
+```powershell
+python .\src\ingest_cfpb.py
+```
 
-This project’s code is released under the MIT licence.  The synthetic dataset was created solely for demonstration purposes and may be reused freely.
+This prints class counts so you can see what you just built.
 
-## Contributing
+> If you only want to work with the sample already in the repo, you can **skip** ingest and go straight to **2) Make a training sample**.
 
-Contributions are welcome!  To report issues or suggest improvements, please open an issue or submit a pull request.
+---
+
+## 2) Make a training sample
+
+**Creates**: `data/raw/customer_feedback_sample.csv`
+
+This step balances the data and keeps “other” smaller (otherwise it dominates). You choose the size with caps.
+
+### A) Small sample (fast + recommended)
+```powershell
+python .\src\make_sample.py --cap 30000 --cap-other 12000
+```
+
+### B) Bigger sample (once everything works)
+```powershell
+python .\src\make_sample.py --cap 50000 --cap-other 20000
+```
+
+> The numbers above are **maximum per class**. If a class has fewer rows than the cap, it will just take all available rows.
+
+---
+
+## 3) Preprocess (split into train/test)
+
+**Creates**: `data/processed/train.csv` and `data/processed/test.csv`
+
+```powershell
+python -m src.preprocess --input ".\data\raw\customer_feedback_sample.csv" --output-dir ".\data\processed" --test-size 0.2 --random-state 42
+```
+
+> We run it as a **module** (`python -m src.preprocess`) to avoid Python’s relative‑import errors.
+
+---
+
+## 4) Train a model (saves to `models/`)
+
+This learns from `train.csv` and writes two files:
+- `models/vectorizer.joblib`
+- `models/classifier.joblib`
+
+### Option 1 — Naive Bayes (ComplementNB) on word 1–2 n‑grams
+Fast and solid for imbalanced text.
+
+```powershell
+python .\src\train.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --model-type complement --alpha 0.3 --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf
+```
+
+### Option 2 — (Optional) Logistic Regression on word 1–2 n‑grams
+Often stronger on messy, real text. Use this **only if** you have `src/train_logreg.py` in the repo.
+
+```powershell
+python .\src\train_logreg.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf --C 2.0
+```
+
+> **Keeping multiple models**: change the output names, e.g.  
+> `--vectorizer-out ".\models\vectorizer_nb.joblib" --model-out ".\models\classifier_nb.joblib"` and similarly for logreg.
+
+---
+
+## 5) Evaluate (see accuracy/F1 + confusion matrix)
+
+**Reads**: the files in `models/`  
+**Writes**: a PNG confusion matrix and a text report
+
+```powershell
+python -m src.evaluate --data-path ".\data\processed\test.csv" --vectorizer ".\models\vectorizer.joblib" --model ".\models\classifier.joblib" --output-fig ".\reports\figures\confusion_matrix.png" | Tee-Object -FilePath ".\reports\classification_report.txt"
+```
+
+Open `reports/` to view results.
+
+> Tip: Also check the **majority baseline** (how big the largest class is). If the largest class is 0.52 and your accuracy is 0.63, that’s a **real** improvement.
+
+---
+
+## 6) Predict single messages (quick demo)
+
+```powershell
+python .\src\predict.py --text "The mobile app crashes when I try to log in"
+python .\src\predict.py --text "I was charged twice and need a refund"
+python .\src\predict.py --text "I never received my new card in the mail"
+```
+
+You’ll see the predicted label and per‑class probabilities.
+
+---
+
+## Training on different sizes (what to use when)
+
+- **Small sample** (`--cap 30000 --cap-other 12000`) — best for learning + quick iteration.  
+- **Bigger sample** (`--cap 50000 --cap-other 20000`) — when the pipeline works and you want a bit more data.  
+- **Full CSV** — not recommended yet. It’s huge and noisy; fix mapping and evaluation first. If you later need to scale, switch to a streaming approach (HashingVectorizer + online/partial_fit) to avoid running out of memory.
+
+---
+
+## What’s actually inside the saved files?
+
+- `vectorizer.joblib` — the TF‑IDF settings (e.g., word vs char n‑grams, min_df, etc.).  
+- `classifier.joblib` — the trained model (Naive Bayes or Logistic Regression).  
+Whichever training command you ran **last** wrote those files. That’s what `predict.py` will use.
+
+If you keep multiple versions (NB vs LogReg), pass their paths explicitly when evaluating/predicting.
+
+---
+
+## Common problems (and fixes)
+
+- **Relative import error** (`attempted relative import with no known parent package`)  
+  → Run scripts that live in `src/` as **modules**:
+  ```powershell
+  python -m src.preprocess ...
+  python -m src.evaluate ...
+  ```
+
+- **pandas not found**  
+  → You ran `py -3 ...` (system Python) instead of your **venv**. Activate venv and use `python`:
+  ```powershell
+  . .\.venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+  ```
+
+- **Command split across lines** (PowerShell)  
+  → If using backticks, the backtick must be the **last character** on the line. Easiest fix: run commands on **one line**.
+
+- **Models get overwritten**  
+  → Change `--vectorizer-out` / `--model-out` to new filenames when you want to keep multiple versions.
+
+---
+
+## FAQ
+
+**Q: Why is accuracy around ~0.6 on real data when the tiny demo looked better?**  
+A: Real messages are messy (multiple issues in one message) and our auto‑labels are noisy. Clean labels matter more than “more data.”
+
+**Q: Can I train on all 2M+ rows?**  
+A: Not yet. It’s slow and won’t fix label noise. First make the model work well on a balanced sample. Then consider streaming/online training.
+
+**Q: What if the model seems unsure?**  
+A: In production, use a **confidence threshold** (if max probability is low, route to “unknown”/human review) to avoid bad misroutes.
+
+---
+
+## Short glossary (no jargon)
+
+- **TF‑IDF**: a way to score words so common words count less and special words count more.
+- **Naive Bayes**: each word “votes” for a box; we add votes and pick the biggest pile.
+- **Confusion matrix**: a picture of where the model is mixing up boxes.
+- **Majority baseline**: accuracy if you always guess the most common box.
+
+---
+
+## Repro checklist
+
+- Same Python version in a virtual env
+- `pip install -r requirements.txt`
+- Same random seed (`--random-state 42`)
+- Same caps in `make_sample.py`
+- Use the same train/evaluate commands
+
+Good luck—and remember: **small, clean steps beat big, messy leaps**.

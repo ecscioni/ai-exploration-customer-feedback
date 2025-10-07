@@ -17,5 +17,5 @@ Thumbs.db
 notes/assets/*.mp4
 notes/assets/*.gif
 
-data/
-data/
+data/raw
+data/processed
