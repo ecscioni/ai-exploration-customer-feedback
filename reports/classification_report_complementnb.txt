@@ -1,0 +1,11 @@
+                 precision    recall  f1-score   support
+
+        app_bug       0.60      0.56      0.58        16
+billing_problem       0.62      0.68      0.65        19
+ delivery_issue       0.68      0.95      0.79        20
+          other       0.90      0.60      0.72        15
+ refund_request       0.75      0.60      0.67        20
+
+       accuracy                           0.69        90
+      macro avg       0.71      0.68      0.68        90
+   weighted avg       0.70      0.69      0.68        90

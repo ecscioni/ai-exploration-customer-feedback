@@ -1,0 +1,11 @@
+# core
+numpy
+pandas
+scikit-learn
+matplotlib
+joblib
+
+# notebooks (pick ONE UI: JupyterLab or classic Notebook)
+jupyterlab
+ipykernel
+notebook
