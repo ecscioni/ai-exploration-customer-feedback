@@ -11,7 +11,12 @@ from __future__ import annotations
 import argparse
 import joblib
 import pandas as pd
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    accuracy_score,
+    f1_score,
+)
 from .utils import plot_confusion_matrix
 
 
@@ -23,8 +28,8 @@ def evaluate(
 ) -> None:
     """Evaluate a saved model on a dataset and optionally save a confusion matrix."""
     df = pd.read_csv(data_path)
-    X = df['text']
-    y = df['category']
+    X = df["text"]
+    y = df["category"]
 
     vectorizer = joblib.load(vectorizer_path)
     model = joblib.load(model_path)
@@ -32,7 +37,7 @@ def evaluate(
     y_pred = model.predict(X_vec)
 
     acc = accuracy_score(y, y_pred)
-    macro_f1 = f1_score(y, y_pred, average='macro')
+    macro_f1 = f1_score(y, y_pred, average="macro")
     print(f"Accuracy: {acc:.3f}")
     print(f"Macro F1: {macro_f1:.3f}\n")
     print(classification_report(y, y_pred))
@@ -40,16 +45,30 @@ def evaluate(
     if output_fig:
         labels = model.classes_
         cm = confusion_matrix(y, y_pred, labels=labels)
-        plot_confusion_matrix(cm, labels, 'Confusion matrix', output_fig)
+        plot_confusion_matrix(cm, labels, "Confusion matrix", output_fig)
         print(f"Confusion matrix saved to {output_fig}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Evaluate a trained classifier on a dataset.')
-    parser.add_argument('--data-path', default='data/processed/test.csv', help='Path to processed CSV file')
-    parser.add_argument('--vectorizer', default='models/vectorizer.joblib', help='Path to saved vectorizer')
-    parser.add_argument('--model', default='models/classifier.joblib', help='Path to saved classifier')
-    parser.add_argument('--output-fig', default=None, help='Path to save confusion matrix PNG')
+    parser = argparse.ArgumentParser(
+        description="Evaluate a trained classifier on a dataset."
+    )
+    parser.add_argument(
+        "--data-path",
+        default="data/processed/test.csv",
+        help="Path to processed CSV file",
+    )
+    parser.add_argument(
+        "--vectorizer",
+        default="models/vectorizer.joblib",
+        help="Path to saved vectorizer",
+    )
+    parser.add_argument(
+        "--model", default="models/classifier.joblib", help="Path to saved classifier"
+    )
+    parser.add_argument(
+        "--output-fig", default=None, help="Path to save confusion matrix PNG"
+    )
     args = parser.parse_args()
 
     evaluate(
@@ -60,5 +79,5 @@ def main():
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
