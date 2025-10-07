@@ -1,4 +1,4 @@
-# AI Exploration — Customer Feedback Classification (Plain-English Guide)
+# AI Exploration — Customer Feedback Classification
 
 This project is a **toy sorter** for short customer messages. You type a message like _“I was charged twice”_, and it predicts one of five boxes:
 
@@ -33,7 +33,7 @@ ai-exploration-customer-feedback/
 
 ---
 
-## Key idea (in kid-friendly words)
+## Key idea
 
 - We turn text into numbers with **TF‑IDF** (common words like “the/and” matter less; special words like “refund/crash” matter more).
 - A simple classifier (**Naive Bayes** by default) learns which words push toward which box.
@@ -41,7 +41,7 @@ ai-exploration-customer-feedback/
   - `models/vectorizer.joblib` — how the text becomes numbers
   - `models/classifier.joblib` — the trained model itself
 
-> If you train again, these files get **overwritten** with the new model. If you want to keep multiple models, save to different filenames (see below).
+> If you train again, these files get **overwritten** with the new model.
 
 ---
 
@@ -69,23 +69,22 @@ pip install -r requirements.txt
 
 ## About the datasets we use
 
-You will see **three sizes** of data in this project:
+I used **three sizes** of data in this project:
 
 - **Small sample** (recommended while learning): `data/raw/customer_feedback_sample.csv`  
   – A balanced-ish subset created from the big CSV. Fast to train/evaluate.
 - **Bigger sample**: same file but with higher caps (see below). Good once the pipeline works.
 - **Full raw CSV**: `data/raw/complaints.csv` from CFPB (very big). We don’t train on the full file yet; it’s slow and noisy.
 
-> **Change of plan (learning outcome):** we keep using `customer_feedback_sample.csv` so failures and fixes are clear. You can still scale up later.
 
 ---
 
-## Workflow overview (plain words)
+## Workflow overview
 
 - **ingest** → map the big complaints CSV to our two columns: `text`, `category` (5 boxes).  
 - **make_sample** → create a smaller, balanced training set (cap each class; keep “other” smaller).  
 - **preprocess** → split the sample into **train** and **test** CSVs.  
-- **train** → learn TF‑IDF + Naive Bayes (or Logistic Regression).  
+- **train** → learn TF‑IDF + Naive Bayes.  
 - **evaluate** → print metrics and save a confusion‑matrix picture.  
 - **predict** → try single messages from the terminal.
 
@@ -156,24 +155,12 @@ This learns from `train.csv` and writes two files:
 - `models/vectorizer.joblib`
 - `models/classifier.joblib`
 
-### Option 1 — Naive Bayes (ComplementNB) on word 1–2 n‑grams
+###  Naive Bayes (ComplementNB) on word 1–2 n‑grams
 Fast and solid for imbalanced text.
 
 ```powershell
 python .\src\train.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --model-type complement --alpha 0.3 --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf
 ```
-
-### Option 2 — (Optional) Logistic Regression on word 1–2 n‑grams
-Often stronger on messy, real text. Use this **only if** you have `src/train_logreg.py` in the repo.
-
-```powershell
-python .\src\train_logreg.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf --C 2.0
-```
-
-> **Keeping multiple models**: change the output names, e.g.  
-> `--vectorizer-out ".\models\vectorizer_nb.joblib" --model-out ".\models\classifier_nb.joblib"` and similarly for logreg.
-
----
 
 ## 5) Evaluate (see accuracy/F1 + confusion matrix)
 
