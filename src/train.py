@@ -1,74 +1,228 @@
-"""
-Training script for the customer feedback classifier.
+# src/train.py
+r"""
+Training script for the customer feedback classifier (TF-IDF + Naive Bayes).
 
-This script reads processed training data, vectorises the text with TF‑IDF and
-trains a Naive Bayes classifier.  The vectoriser and classifier are saved to
-disk as joblib files.
+Adds flexible flags:
+  --analyzer {word,char,char_wb}
+  --char-min/--char-max (for char n-grams)
+  --min-df / --max-df / --sublinear-tf / --max-features
+  --model-type {multinomial,complement}
+  --alpha
+
+Examples (PowerShell):
+
+# WORD unigrams+bigrams, ComplementNB, stronger min_df
+python .\src\train.py `
+  --train-path ".\data\processed\train.csv" `
+  --vectorizer-out ".\models\vectorizer.joblib" `
+  --model-out ".\models\classifier.joblib" `
+  --model-type complement `
+  --alpha 0.3 `
+  --analyzer word `
+  --min-df 10 `
+  --max-ngram 2 `
+  --sublinear-tf
+
+# CHAR n-grams (char_wb 3–5), ComplementNB, capped features
+python .\src\train.py `
+  --train-path ".\data\processed\train.csv" `
+  --vectorizer-out ".\models\vectorizer.joblib" `
+  --model-out ".\models\classifier.joblib" `
+  --model-type complement `
+  --alpha 0.3 `
+  --analyzer char_wb `
+  --char-min 3 `
+  --char-max 5 `
+  --min-df 5 `
+  --sublinear-tf `
+  --max-features 200000
 """
 
 from __future__ import annotations
 
 import argparse
-import os
+from pathlib import Path
+
 import joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB, ComplementNB
-from sklearn.metrics import classification_report, accuracy_score, f1_score
+from sklearn.naive_bayes import ComplementNB, MultinomialNB
 
 
-def train_model(
-    train_path: str,
-    vectorizer_out: str,
-    model_out: str,
-    model_type: str = 'multinomial',
-    alpha: float = 0.1,
-    ngram_range: tuple = (1, 2),
-    min_df: int = 2,
-) -> None:
-    """Train a TF‑IDF + Naive Bayes classifier and save artefacts."""
-    df = pd.read_csv(train_path)
-    X_train = df['text']
-    y_train = df['category']
+def _coerce_min_df(val):
+    """
+    Accept both proportions (0<val<=1.0) and counts (>=1).
+    If a float > 1.0 is given (e.g., 10.0), cast to int 10 so sklearn is happy.
+    """
+    if isinstance(val, int):
+        return val
+    try:
+        v = float(val)
+    except Exception as e:
+        raise argparse.ArgumentTypeError(
+            "min_df must be int>=1 or float in (0,1]."
+        ) from e
+    if v > 1.0:
+        return int(round(v))
+    if 0.0 < v <= 1.0:
+        return v
+    raise argparse.ArgumentTypeError("min_df must be int>=1 or float in (0,1].")
 
-    vectorizer = TfidfVectorizer(lowercase=True, ngram_range=ngram_range, min_df=min_df)
-    X_train_vec = vectorizer.fit_transform(X_train)
 
-    if model_type == 'complement':
-        clf = ComplementNB(alpha=alpha)
+def build_vectorizer(
+    analyzer: str,
+    max_ngram: int,
+    char_min: int,
+    char_max: int,
+    min_df,
+    max_df: float,
+    sublinear_tf: bool,
+    max_features: int | None,
+) -> TfidfVectorizer:
+    # make sure min_df obeys sklearn contract
+    min_df = _coerce_min_df(min_df)
+
+    if analyzer == "word":
+        ngram_range = (1, max_ngram)
+    elif analyzer in ("char", "char_wb"):
+        ngram_range = (char_min, char_max)
     else:
-        clf = MultinomialNB(alpha=alpha)
-    clf.fit(X_train_vec, y_train)
+        raise ValueError("analyzer must be one of: word, char, char_wb")
 
-    # Save artefacts
-    os.makedirs(os.path.dirname(vectorizer_out), exist_ok=True)
-    joblib.dump(vectorizer, vectorizer_out)
-    joblib.dump(clf, model_out)
-    print(f"Saved vectorizer to {vectorizer_out} and classifier to {model_out}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Train a Naive Bayes classifier on customer feedback.')
-    parser.add_argument('--train-path', default='data/processed/train.csv', help='Path to the processed training CSV')
-    parser.add_argument('--vectorizer-out', default='models/vectorizer.joblib', help='Path to save the vectorizer')
-    parser.add_argument('--model-out', default='models/classifier.joblib', help='Path to save the classifier')
-    parser.add_argument('--model-type', choices=['multinomial', 'complement'], default='multinomial', help='Type of Naive Bayes model')
-    parser.add_argument('--alpha', type=float, default=0.1, help='Smoothing parameter for Naive Bayes')
-    parser.add_argument('--min-df', type=int, default=2, help='Minimum document frequency for TF‑IDF')
-    parser.add_argument('--max-ngram', type=int, default=2, help='Maximum n‑gram size (min n‑gram is 1)')
-    args = parser.parse_args()
-
-    ngram_range = (1, args.max_ngram)
-    train_model(
-        train_path=args.train_path,
-        vectorizer_out=args.vectorizer_out,
-        model_out=args.model_out,
-        model_type=args.model_type,
-        alpha=args.alpha,
+    return TfidfVectorizer(
+        analyzer=analyzer,
         ngram_range=ngram_range,
-        min_df=args.min_df,
+        lowercase=True,
+        min_df=min_df,  # int>=1 or 0<float<=1
+        max_df=max_df,  # 0<float<=1 for corpus-specific stop-words
+        sublinear_tf=sublinear_tf,
+        max_features=max_features,
     )
 
 
-if __name__ == '__main__':
+def load_training_csv(path: str | Path) -> pd.DataFrame:
+    df = pd.read_csv(path, encoding="utf-8", low_memory=False)
+    if "text" not in df.columns or "category" not in df.columns:
+        raise SystemExit(
+            f"Expected columns 'text' and 'category' in {path}. Got: {list(df.columns)[:10]} ..."
+        )
+    df = df.dropna(subset=["text", "category"]).copy()
+    df["text"] = df["text"].astype(str).str.strip()
+    df = df.drop_duplicates(subset=["text", "category"]).reset_index(drop=True)
+    return df
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description="Train TF-IDF + Naive Bayes text classifier."
+    )
+
+    # IO
+    p.add_argument(
+        "--train-path",
+        required=True,
+        help="Path to training CSV (must have 'text','category').",
+    )
+    p.add_argument(
+        "--vectorizer-out", required=True, help="Where to save vectorizer .joblib"
+    )
+    p.add_argument(
+        "--model-out", required=True, help="Where to save classifier .joblib"
+    )
+
+    # Vectorizer options
+    p.add_argument("--analyzer", choices=["word", "char", "char_wb"], default="word")
+    p.add_argument(
+        "--max-ngram",
+        type=int,
+        default=2,
+        help="For word analyzer: use (1, max_ngram).",
+    )
+    p.add_argument(
+        "--char-min", type=int, default=3, help="For char analyzers: min n-gram length."
+    )
+    p.add_argument(
+        "--char-max", type=int, default=5, help="For char analyzers: max n-gram length."
+    )
+    p.add_argument(
+        "--min-df",
+        type=float,
+        default=2,
+        help="Doc-frequency cutoff: int>=1 or 0<frac<=1.",
+    )
+    p.add_argument(
+        "--max-df",
+        type=float,
+        default=1.0,
+        help="Drop too-common terms: fraction in (0,1].",
+    )
+    p.add_argument("--sublinear-tf", action="store_true", help="Use 1+log(tf) scaling.")
+    p.add_argument(
+        "--max-features", type=int, default=None, help="Cap vocabulary size."
+    )
+
+    # Model options
+    p.add_argument(
+        "--model-type",
+        choices=["multinomial", "complement"],
+        default="multinomial",
+        help="ComplementNB often helps on imbalanced text.",
+    )
+    p.add_argument(
+        "--alpha", type=float, default=0.3, help="NB smoothing (try 0.1, 0.3, 1.0)."
+    )
+
+    args = p.parse_args()
+
+    # Load data
+    train_df = load_training_csv(args.train_path)
+
+    # Vectorize
+    vectorizer = build_vectorizer(
+        analyzer=args.analyzer,
+        max_ngram=args.max_ngram,
+        char_min=args.char_min,
+        char_max=args.char_max,
+        min_df=args.min_df,
+        max_df=args.max_df,
+        sublinear_tf=args.sublinear_tf,
+        max_features=args.max_features,
+    )
+    X = vectorizer.fit_transform(train_df["text"])
+    y = train_df["category"].values
+
+    # Model
+    if args.model_type == "complement":
+        clf = ComplementNB(alpha=args.alpha)
+    else:
+        clf = MultinomialNB(alpha=args.alpha)
+
+    clf.fit(X, y)
+
+    # Save
+    Path(args.vectorizer_out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.model_out).parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(vectorizer, args.vectorizer_out)
+    joblib.dump(clf, args.model_out)
+
+    # Summary
+    vocab_size = getattr(vectorizer, "vocabulary_", None)
+    vocab_n = len(vocab_size) if vocab_size is not None else X.shape[1]
+    print("=== Training summary ===")
+    print(f"Rows: {X.shape[0]:,}")
+    print(f"Features (vocab): {vocab_n:,}")
+    print(f"Analyzer: {args.analyzer}")
+    if args.analyzer == "word":
+        print(f"Word n-grams: (1, {args.max_ngram})")
+    else:
+        print(f"Char n-grams: ({args.char_min}, {args.char_max})")
+    print(
+        f"min_df={_coerce_min_df(args.min_df)}, max_df={args.max_df}, sublinear_tf={args.sublinear_tf}, max_features={args.max_features}"
+    )
+    print(f"Model: {args.model_type}, alpha={args.alpha}")
+    print(f"Saved vectorizer → {args.vectorizer_out}")
+    print(f"Saved classifier → {args.model_out}")
+
+
+if __name__ == "__main__":
     main()
