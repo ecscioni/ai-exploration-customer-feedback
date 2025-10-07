@@ -16,3 +16,5 @@ Thumbs.db
 # Big assets (keep small images ok)
 notes/assets/*.mp4
 notes/assets/*.gif
+
+data/raw/customer_feedback.csv
