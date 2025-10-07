@@ -17,5 +17,7 @@ Thumbs.db
 notes/assets/*.mp4
 notes/assets/*.gif
 
-data/raw
+data/raw/complaints.csv
+data/raw/customer_feedback.csv
+data/raw/customer_feedback_sample.csv
 data/processed

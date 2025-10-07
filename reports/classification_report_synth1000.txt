@@ -1,0 +1,16 @@
+Accuracy: 1.000
+Macro F1: 1.000
+
+                 precision    recall  f1-score   support
+
+        app_bug       1.00      1.00      1.00        39
+billing_problem       1.00      1.00      1.00        37
+ delivery_issue       1.00      1.00      1.00        40
+          other       1.00      1.00      1.00        45
+ refund_request       1.00      1.00      1.00        39
+
+       accuracy                           1.00       200
+      macro avg       1.00      1.00      1.00       200
+   weighted avg       1.00      1.00      1.00       200
+
+Confusion matrix saved to .\reports\figures\confusion_matrix_synth1000.png

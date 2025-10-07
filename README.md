@@ -1,4 +1,4 @@
-# AI Exploration — Customer Feedback Classification (Plain-English Guide)
+# AI Exploration — Customer Feedback Classification
 
 This project is a **toy sorter** for short customer messages. You type a message like _“I was charged twice”_, and it predicts one of five boxes:
 
@@ -33,7 +33,7 @@ ai-exploration-customer-feedback/
 
 ---
 
-## Key idea (in kid-friendly words)
+## Key idea
 
 - We turn text into numbers with **TF‑IDF** (common words like “the/and” matter less; special words like “refund/crash” matter more).
 - A simple classifier (**Naive Bayes** by default) learns which words push toward which box.
@@ -41,7 +41,7 @@ ai-exploration-customer-feedback/
   - `models/vectorizer.joblib` — how the text becomes numbers
   - `models/classifier.joblib` — the trained model itself
 
-> If you train again, these files get **overwritten** with the new model. If you want to keep multiple models, save to different filenames (see below).
+> If you train again, these files get **overwritten** with the new model.
 
 ---
 
@@ -67,25 +67,62 @@ pip install -r requirements.txt
 
 ---
 
-## About the datasets we use
+## How to use it (quick)
 
-You will see **three sizes** of data in this project:
+Save the sample CSV into your project at:
 
-- **Small sample** (recommended while learning): `data/raw/customer_feedback_sample.csv`  
-  – A balanced-ish subset created from the big CSV. Fast to train/evaluate.
-- **Bigger sample**: same file but with higher caps (see below). Good once the pipeline works.
-- **Full raw CSV**: `data/raw/complaints.csv` from CFPB (very big). We don’t train on the full file yet; it’s slow and noisy.
+```
+ai-exploration-customer-feedback/data/raw/customer_feedback_1000.csv
+```
 
-> **Change of plan (learning outcome):** we keep using `customer_feedback_sample.csv` so failures and fixes are clear. You can still scale up later.
+(Overwrite the existing sample if you want.)
+
+Split, train, evaluate:
+
+```powershell
+python -m src.preprocess --input ".\data\raw\customer_feedback_1000.csv" --output-dir ".\data\processed" --test-size 0.2 --random-state 42
+```
+
+```powershell
+python .\src\train.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --model-type complement --alpha 0.3 --analyzer word --min-df 5 --max-df 0.95 --max-ngram 2 --sublinear-tf
+```
+
+```powershell
+python -m src.evaluate --data-path ".\data\processed\test.csv" --vectorizer ".\models\vectorizer.joblib" --model ".\models\classifier.joblib" --output-fig ".\reports\figures\confusion_matrix_synth1000.png" | Tee-Object -FilePath ".\reports\classification_report_synth1000.txt"
+```
+
+**About the `customer_feedback_1000.csv` used above**
+
+This created 1,000‑row file is deliberately “friendly” to the model:
+
+- clear signal words for each class (e.g., “refund”, “charged twice”, “card not received”, “app crashes”),
+- varied phrasing so it doesn’t overfit identical sentences,
+- minimum text length ≥ 15 characters, no empty rows, and deduped.
+
+If you want a version with stronger class balance (exactly 200 per class), say the word and I’ll regenerate it perfectly balanced.
 
 ---
 
-## Workflow overview (plain words)
+## About the datasets we use
+
+I used **several options** of data in this project:
+
+- **Created demo (synthetic)**: `data/raw/customer_feedback_1000.csv`  
+  – 1,000 rows hand‑crafted to be model‑friendly and fast for teaching.
+- **Small sample from real data**: `data/raw/customer_feedback_sample.csv`  
+  – A balanced‑ish subset created from the big CSV. Fast to train/evaluate.
+- **Bigger sample from real data**: same file but with higher caps (see below). Good once the pipeline works.
+- **Full raw CSV**: `data/raw/complaints.csv` from CFPB (very big). We don’t train on the full file yet; it’s slow and noisy.
+
+
+---
+
+## Workflow overview
 
 - **ingest** → map the big complaints CSV to our two columns: `text`, `category` (5 boxes).  
 - **make_sample** → create a smaller, balanced training set (cap each class; keep “other” smaller).  
 - **preprocess** → split the sample into **train** and **test** CSVs.  
-- **train** → learn TF‑IDF + Naive Bayes (or Logistic Regression).  
+- **train** → learn TF‑IDF + Naive Bayes.  
 - **evaluate** → print metrics and save a confusion‑matrix picture.  
 - **predict** → try single messages from the terminal.
 
@@ -143,7 +180,7 @@ python .\src\make_sample.py --cap 50000 --cap-other 20000
 **Creates**: `data/processed/train.csv` and `data/processed/test.csv`
 
 ```powershell
-python -m src.preprocess --input ".\data\raw\customer_feedback_sample.csv" --output-dir ".\data\processed" --test-size 0.2 --random-state 42
+python -m src.preprocess --input ".\data\raw\customer_feedback_1000.csv" --output-dir ".\data\processed" --test-size 0.2 --random-state 42
 ```
 
 > We run it as a **module** (`python -m src.preprocess`) to avoid Python’s relative‑import errors.
@@ -156,22 +193,12 @@ This learns from `train.csv` and writes two files:
 - `models/vectorizer.joblib`
 - `models/classifier.joblib`
 
-### Option 1 — Naive Bayes (ComplementNB) on word 1–2 n‑grams
+###  Naive Bayes (ComplementNB) on word 1–2 n‑grams
 Fast and solid for imbalanced text.
 
 ```powershell
 python .\src\train.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --model-type complement --alpha 0.3 --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf
 ```
-
-### Option 2 — (Optional) Logistic Regression on word 1–2 n‑grams
-Often stronger on messy, real text. Use this **only if** you have `src/train_logreg.py` in the repo.
-
-```powershell
-python .\src\train_logreg.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf --C 2.0
-```
-
-> **Keeping multiple models**: change the output names, e.g.  
-> `--vectorizer-out ".\models\vectorizer_nb.joblib" --model-out ".\models\classifier_nb.joblib"` and similarly for logreg.
 
 ---
 
@@ -199,6 +226,38 @@ python .\src\predict.py --text "I never received my new card in the mail"
 ```
 
 You’ll see the predicted label and per‑class probabilities.
+
+### More examples (cover each class)
+
+**delivery_issue**
+```powershell
+python .\src\predict.py --text "Package marked delivered but nothing arrived and tracking is stuck"
+python .\src\predict.py --text "Courier says delivered yesterday yet I never received the order"
+```
+
+**refund_request**
+```powershell
+python .\src\predict.py --text "I want a refund because I was billed for a service I canceled"
+python .\src\predict.py --text "Please reverse the charge and refund the duplicate payment"
+```
+
+**billing_problem**
+```powershell
+python .\src\predict.py --text "My statement shows an extra monthly fee I didn't authorize"
+python .\src\predict.py --text "Was charged twice for the same transaction on my card"
+```
+
+**app_bug**
+```powershell
+python .\src\predict.py --text "App crashes whenever I tap the transfer button on Android"
+python .\src\predict.py --text "Login screen freezes after entering the OTP code"
+```
+
+**other**
+```powershell
+python .\src\predict.py --text "Where can I update my mailing address on my account?"
+python .\src\predict.py --text "I need help changing my email preferences and alerts"
+```
 
 ---
 
