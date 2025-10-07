@@ -69,12 +69,17 @@ pip install -r requirements.txt
 
 ## How to use it (quick)
 
+<<<<<<< HEAD
 Save the sample CSV into your project at:
+=======
+I used **three sizes** of data in this project:
+>>>>>>> 49cc1ba9679923ba1779168f959d6b464eec9e2e
 
 ```
 ai-exploration-customer-feedback/data/raw/customer_feedback_1000.csv
 ```
 
+<<<<<<< HEAD
 (Overwrite the existing sample if you want.)
 
 Split, train, evaluate:
@@ -117,6 +122,11 @@ I used **several options** of data in this project:
 
 ---
 
+=======
+
+---
+
+>>>>>>> 49cc1ba9679923ba1779168f959d6b464eec9e2e
 ## Workflow overview
 
 - **ingest** → map the big complaints CSV to our two columns: `text`, `category` (5 boxes).  
@@ -200,8 +210,11 @@ Fast and solid for imbalanced text.
 python .\src\train.py --train-path ".\data\processed\train.csv" --vectorizer-out ".\models\vectorizer.joblib" --model-out ".\models\classifier.joblib" --model-type complement --alpha 0.3 --analyzer word --min-df 10 --max-df 0.95 --max-ngram 2 --sublinear-tf
 ```
 
+<<<<<<< HEAD
 ---
 
+=======
+>>>>>>> 49cc1ba9679923ba1779168f959d6b464eec9e2e
 ## 5) Evaluate (see accuracy/F1 + confusion matrix)
 
 **Reads**: the files in `models/`  
